@@ -1,1 +1,448 @@
-<h1>Github pages int</h1>
+<h1>import os
+import json
+from datetime import datetime, timedelta
+import time
+from typing import List, Dict, Any, Tuple
+
+class SistemaVentas:
+    # Códigos ANSI para colores (compatibles con la mayoría de las terminales)
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    ENDC = '\033[0m'
+    LIGHT_GRAY = '\033[37m'
+    
+    # Colores específicos para la interfaz profesional
+    COLOR_TITULO = BOLD + CYAN + UNDERLINE
+    COLOR_SEPARADOR = LIGHT_GRAY
+    COLOR_MENU = BLUE
+    COLOR_EXITO = BOLD + GREEN
+    COLOR_ADVERTENCIA = BOLD + YELLOW
+    COLOR_ERROR = BOLD + RED
+    COLOR_VALOR = BOLD + ENDC # Texto fuerte sin color
+
+    def __init__(self):
+        self.archivo_productos = "productos.json"
+        self.archivo_clientes = "clientes.json"
+        self.archivo_vendedores = "vendedores.json"
+        self.archivo_ventas = "ventas.json"
+        self.cargar_datos()
+        # Muestra la pantalla de inicio al iniciar el sistema
+        self.pantalla_inicio()
+    
+    def formato_moneda_entero(self, valor: float, ancho: int = None) -> str:
+        """
+        Formatea un valor numérico a un string con separador de miles (punto)
+        y sin decimales, truncando la parte decimal. Ejemplo: 123456.78 -> '123.456'.
+        Acepta un parámetro 'ancho' para padding.
+        """
+        # Truncar la parte decimal y convertir a entero para usar el especificador 'd'
+        valor_entero = int(valor)
+        
+        # Usar el formato de entero con separador de miles (',' es el separador por defecto en f-strings)
+        formato = f"{valor_entero:,}"
+        
+        # Reemplazar la coma (separador de miles por defecto en muchos sistemas) por el punto
+        formato = formato.replace(",", ".")
+        
+        if ancho is not None:
+             # Si se proporciona ancho, se aplica el padding de alineación derecha
+            return f"{formato:>{ancho}}"
+            
+        return formato
+    
+    def cargar_datos(self):
+        """Carga los datos desde los archivos JSON"""
+        self.productos = self.cargar_json(self.archivo_productos)
+        self.clientes = self.cargar_json(self.archivo_clientes)
+        self.vendedores = self.cargar_json(self.archivo_vendedores)
+        self.ventas = self.cargar_json(self.archivo_ventas)
+        # ⚠️ IMPORTANTE: Corregir datos antiguos de clientes (email -> dni)
+        self._corregir_datos_clientes()
+    
+    def _corregir_datos_clientes(self):
+        """Revisa clientes y cambia la clave 'email' por 'dni' para mantener compatibilidad."""
+        cambio_realizado = False
+        for cliente in self.clientes:
+            # Si tiene 'email' pero no 'dni', lo renombramos
+            if 'email' in cliente and 'dni' not in cliente:
+                cliente['dni'] = cliente.pop('email') # Mueve el valor y renombra la clave
+                cambio_realizado = True
+            # Aseguramos que siempre exista la clave 'dni' y 'telefono' por si es un archivo JSON nuevo
+            if 'dni' not in cliente:
+                 cliente['dni'] = ""
+            if 'telefono' not in cliente:
+                 cliente['telefono'] = ""
+        
+        if cambio_realizado:
+            # Guardamos los datos corregidos si hubo algún cambio
+            self.guardar_json(self.clientes, self.archivo_clientes)
+
+    def cargar_json(self, archivo: str) -> List[Dict[str, Any]]:
+        """Carga un archivo JSON, retorna lista vacía si no existe"""
+        try:
+            # Crea el archivo vacío si no existe
+            if not os.path.exists(archivo):
+                with open(archivo, 'w', encoding='utf-8') as f:
+                    json.dump([], f)
+                return []
+            
+            with open(archivo, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"{self.COLOR_ADVERTENCIA}Advertencia: El archivo {archivo} está corrupto o vacío. Se inicializará vacío.{self.ENDC}")
+            return []
+    
+    def guardar_json(self, datos: List[Dict[str, Any]], archivo: str):
+        """Guarda datos en archivo JSON"""
+        with open(archivo, 'w', encoding='utf-8') as f:
+            json.dump(datos, f, indent=4, ensure_ascii=False)
+    
+    def limpiar_pantalla(self):
+        """Limpia la pantalla de la consola"""
+        os.system('cls' if os.name == 'nt' else 'clear')
+    
+    def pausar(self):
+        """Pausa la ejecución hasta que el usuario presione Enter"""
+        input(f"\n{self.COLOR_SEPARADOR}Presione Enter para continuar...{self.ENDC}")
+    
+    def pantalla_inicio(self):
+        """Muestra la pantalla de inicio con totales y fecha/hora"""
+        self.limpiar_pantalla()
+        
+        # Reducir ancho a 45
+        separador = "=" * 45
+        
+        fecha_actual = datetime.now().strftime("%d-%m-%Y")
+        hora_actual = datetime.now().strftime("%H:%M:%S")
+
+        print(self.COLOR_TITULO + separador)
+        print("  SISTEMA DE GESTIÓN Y VENTAS PROFESIONAL")
+        print(separador + self.ENDC)
+        
+        print(f"{self.COLOR_SEPARADOR}Fecha: {self.COLOR_VALOR}{fecha_actual:<15}{self.ENDC}")
+        print(f"{self.COLOR_SEPARADOR}Hora:  {self.COLOR_VALOR}{hora_actual:<15}{self.ENDC}")
+        print(self.COLOR_SEPARADOR + "-" * 45 + self.ENDC)
+        
+        print(f"{self.COLOR_MENU}RESUMEN DE DATOS ACTUALES:{self.ENDC}")
+        print(f"  {self.BLUE}Productos:{self.ENDC}   {self.COLOR_VALOR}{len(self.productos)}{self.ENDC}")
+        print(f"  {self.BLUE}Clientes:{self.ENDC}    {self.COLOR_VALOR}{len(self.clientes)}{self.ENDC}")
+        print(f"  {self.BLUE}Vendedores:{self.ENDC}  {self.COLOR_VALOR}{len(self.vendedores)}{self.ENDC}")
+        print(f"  {self.BLUE}Ventas Reg.:{self.ENDC} {self.COLOR_VALOR}{len(self.ventas)}{self.ENDC}")
+        
+        print(self.COLOR_TITULO + separador + self.ENDC)
+        self.pausar()
+
+
+    def mostrar_menu(self):
+        """Muestra el menú principal"""
+        self.limpiar_pantalla()
+        separador = "=" * 35 # Reducir
+        
+        print(self.COLOR_TITULO + separador)
+        print("    MENÚ PRINCIPAL DE NAVEGACIÓN")
+        print(separador + self.ENDC)
+        print(f"{self.COLOR_MENU}1. VENTAS{self.ENDC}")
+        print(f"{self.COLOR_MENU}2. PRODUCTOS{self.ENDC}")
+        print(f"{self.COLOR_MENU}3. CLIENTES{self.ENDC}")
+        print(f"{self.COLOR_MENU}4. VENDEDORES{self.ENDC}")
+        print(f"{self.COLOR_ERROR}5. SALIR{self.ENDC}")
+        print(self.COLOR_SEPARADOR + separador + self.ENDC)
+    
+    def ejecutar(self):
+        """Ejecuta el sistema principal"""
+        # Ya no mostramos la pantalla de inicio aquí, se hace en __init__
+        while True:
+            self.mostrar_menu()
+            opcion = input(f"Seleccione una opción ({self.COLOR_VALOR}1-5{self.ENDC}): ").strip()
+            
+            if opcion == "1":
+                self.menu_ventas()
+            elif opcion == "2":
+                self.menu_productos()
+            elif opcion == "3":
+                self.menu_clientes()
+            elif opcion == "4":
+                self.menu_vendedores()
+            elif opcion == "5":
+                self.limpiar_pantalla()
+                print(f"{self.COLOR_EXITO}¡Gracias por usar el sistema! Vuelva pronto.{self.ENDC}")
+                break
+            else:
+                print(f"{self.COLOR_ERROR}Opción inválida. Intente nuevamente.{self.ENDC}")
+                self.pausar()
+    
+    # ===== MÓDULO DE VENTAS =====
+    def menu_ventas(self):
+        """Menú del módulo de ventas"""
+        while True:
+            self.limpiar_pantalla()
+            separador = "=" * 35 # Reducir
+            print(self.COLOR_TITULO + separador)
+            print("     MÓDULO DE VENTAS")
+            print(separador + self.ENDC)
+            print(f"{self.COLOR_MENU}1. Registrar Venta{self.ENDC}")
+            print(f"{self.COLOR_MENU}2. Listar Ventas (Histórico){self.ENDC}")
+            print(f"{self.COLOR_MENU}3. Reportes{self.ENDC}")
+            print(f"{self.COLOR_ADVERTENCIA}4. Volver al Menú Principal{self.ENDC}")
+            print(self.COLOR_SEPARADOR + separador + self.ENDC)
+            
+            opcion = input(f"Seleccione una opción ({self.COLOR_VALOR}1-4{self.ENDC}): ").strip()
+            
+            if opcion == "1":
+                self.registrar_venta()
+            elif opcion == "2":
+                self.listar_ventas()
+            elif opcion == "3":
+                self.menu_reportes_ventas()
+            elif opcion == "4":
+                break
+            else:
+                print(f"{self.COLOR_ERROR}Opción inválida.{self.ENDC}")
+                self.pausar()
+
+    def menu_reportes_ventas(self):
+        """Menú de reportes de ventas (Semanal y Semanas Pasadas)"""
+        while True:
+            self.limpiar_pantalla()
+            separador = "=" * 55 # Aumentar un poco el ancho
+            print(self.COLOR_TITULO + separador)
+            print("      REPORTES DE VENTAS Y RENDIMIENTO")
+            print(separador + self.ENDC)
+            
+            # --- OPCIONES MEJORADAS ---
+            print(f"{self.COLOR_MENU}1. Ventas de la Semana Actual (Beneficio y Rentabilidad){self.ENDC}")
+            print(f"{self.COLOR_MENU}2. Top Clientes y Productos (Total Histórico){self.ENDC}")
+            print(f"{self.COLOR_MENU}3. Pago a Vendedores (Semanal){self.ENDC}")
+            print(f"{self.COLOR_MENU}4. Registro de Ventas de Semanas Pasadas{self.ENDC}")
+            print(f"{self.COLOR_ADVERTENCIA}5. Volver al Menú de Ventas{self.ENDC}")
+            print(self.COLOR_SEPARADOR + separador + self.ENDC)
+
+            opcion = input(f"Seleccione una opción ({self.COLOR_VALOR}1-5{self.ENDC}): ").strip()
+
+            if opcion == "1":
+                self.reporte_ventas_periodo()
+            elif opcion == "2":
+                self.reporte_top_clientes_productos()
+            elif opcion == "3":
+                self.reporte_pago_vendedores()
+            elif opcion == "4":
+                self.menu_ventas_semanas_pasadas() # Nueva función
+            elif opcion == "5":
+                break
+            else:
+                print(f"{self.COLOR_ERROR}Opción inválida.{self.ENDC}")
+                self.pausar()
+    
+    def registrar_venta(self):
+        """Registra una nueva venta"""
+        self.limpiar_pantalla()
+        separador = "=" * 40
+        print(self.COLOR_TITULO + separador)
+        print("        REGISTRAR NUEVA VENTA")
+        print(separador + self.ENDC)
+        
+        # Mostrar productos disponibles
+        if not self.productos:
+            print(f"{self.COLOR_ADVERTENCIA}No hay productos registrados.{self.ENDC}")
+            self.pausar()
+            return
+        
+        print(f"\n{self.COLOR_MENU}Productos disponibles:{self.ENDC}")
+        self.listar_productos_tabla(self.productos) # Aquí uso self.productos directamente
+        
+        # Seleccionar producto
+        try:
+            id_producto = int(input(f"\nID del producto a vender ({self.COLOR_VALOR}ID{self.ENDC}): "))
+            producto = next((p for p in self.productos if p['id'] == id_producto), None)
+            if not producto:
+                print(f"{self.COLOR_ERROR}Producto no encontrado.{self.ENDC}")
+                self.pausar()
+                return
+        except ValueError:
+            print(f"{self.COLOR_ERROR}ID debe ser un número.{self.ENDC}")
+            self.pausar()
+            return
+        
+        # Seleccionar cliente
+        if not self.clientes:
+            print(f"{self.COLOR_ADVERTENCIA}No hay clientes registrados. Se registrará como 'Cliente General'{self.ENDC}")
+            cliente_id = 0
+            cliente_nombre = "Cliente General"
+        else:
+            print(f"\n{self.COLOR_MENU}Clientes disponibles (ID/Nombre):{self.ENDC}")
+            self.listar_clientes_tabla_simple()
+            
+            try:
+                cliente_id_input = input(f"\nID del cliente ({self.COLOR_VALOR}0 para General{self.ENDC}): ").strip()
+                if cliente_id_input == '0':
+                    cliente_id = 0
+                    cliente_nombre = "Cliente General"
+                else:
+                    cliente_id = int(cliente_id_input)
+                    cliente = next((c for c in self.clientes if c['id'] == cliente_id), None)
+                    if not cliente:
+                        print(f"{self.COLOR_ERROR}Cliente no encontrado.{self.ENDC}")
+                        self.pausar()
+                        return
+                    cliente_nombre = cliente['nombre']
+            except ValueError:
+                print(f"{self.COLOR_ERROR}ID debe ser un número o 0.{self.ENDC}")
+                self.pausar()
+                return
+        
+        # Seleccionar vendedor
+        if not self.vendedores:
+            print(f"{self.COLOR_ERROR}No hay vendedores registrados.{self.ENDC}")
+            self.pausar()
+            return
+        
+        print(f"\n{self.COLOR_MENU}Vendedores disponibles (ID/Comisión %):{self.ENDC}")
+        # Compactar la lista de vendedores
+        for vendedor in self.vendedores:
+            comision = vendedor.get('comision_beneficio', 0)
+            print(f"ID: {vendedor['id']} - {vendedor['nombre'][:15]} - Com: {comision:.1f}%")
+
+        try:
+            vendedor_id = int(input("\nID del vendedor: "))
+            vendedor = next((v for v in self.vendedores if v['id'] == vendedor_id), None)
+            if not vendedor:
+                print(f"{self.COLOR_ERROR}Vendedor no encontrado.{self.ENDC}")
+                self.pausar()
+                return
+        except ValueError:
+            print(f"{self.COLOR_ERROR}ID debe ser un número.{self.ENDC}")
+            self.pausar()
+            return
+        
+        # Cantidad (Validación de 1 a 999 y vs Stock)
+        try:
+            # --- VALIDACIÓN DE CANTIDAD (1 a 999 y vs Stock) ---
+            while True:
+                cantidad_input = input("Cantidad (máx 999): ")
+                if not cantidad_input.isdigit():
+                    print(f"{self.COLOR_ERROR}❌ Error: La cantidad debe ser un número entero.{self.ENDC}")
+                    continue
+                
+                cantidad = int(cantidad_input)
+                
+                if not (1 <= cantidad <= 999): # La cantidad no puede ser 0
+                    print(f"{self.COLOR_ERROR}❌ Error: La cantidad a vender debe ser entre 1 y 999.{self.ENDC}")
+                    continue
+                
+                stock_actual = producto.get('stock', 0)
+                if cantidad > stock_actual:
+                     print(f"{self.COLOR_ERROR}❌ Error: Solo quedan {stock_actual} unidades de {producto['nombre']} en stock.{self.ENDC}")
+                     continue # Pide la cantidad de nuevo
+                     
+                break # Sale del bucle si la cantidad es válida y hay stock
+            # --- FIN VALIDACIÓN ---
+
+        except Exception: # Captura si el input no es un número y la validación falla antes de llegar al while
+            print(f"{self.COLOR_ERROR}Cantidad debe ser un número.{self.ENDC}")
+            self.pausar()
+            return
+        
+        # Calcular totales
+        subtotal = producto['precio_venta'] * cantidad
+        beneficio_total = producto['beneficio'] * cantidad
+        
+        # Comisión se calcula sobre el BENEFICIO
+        comision_porcentaje = vendedor.get('comision_beneficio', 0)
+        comision_vendedor = (beneficio_total * comision_porcentaje) / 100
+        
+        total = subtotal
+        
+        # Mostrar resumen - APLICANDO FORMATO_MONEDA_ENTERO
+        # Reducir ancho a 40
+        print("\n" + self.COLOR_SEPARADOR + "=" * 40 + self.ENDC)
+        print(f"{self.COLOR_TITULO}   RESUMEN DE VENTA{self.ENDC}")
+        print(self.COLOR_SEPARADOR + "=" * 40 + self.ENDC)
+        print(f"Producto:        {self.COLOR_VALOR}{producto['nombre'][:20]}{self.ENDC}")
+        print(f"Cliente:         {self.COLOR_VALOR}{cliente_nombre[:20]}{self.ENDC}")
+        print(f"Vendedor:        {self.COLOR_VALOR}{vendedor['nombre'][:20]}{self.ENDC}")
+        print(f"Cantidad:        {self.COLOR_VALOR}{cantidad}{self.ENDC}")
+        # APLICACIÓN DE CAMBIO
+        print(f"Precio Unit.:    {self.COLOR_VALOR}${self.formato_moneda_entero(producto['precio_venta'])}{self.ENDC}")
+        print(self.COLOR_SEPARADOR + "-" * 40 + self.ENDC)
+        # APLICACIÓN DE CAMBIO
+        print(f"Subtotal:        {self.COLOR_VALOR}${self.formato_moneda_entero(subtotal)}{self.ENDC}")
+        # APLICACIÓN DE CAMBIO
+        print(f"Beneficio Total: {self.COLOR_VALOR}{self.GREEN}${self.formato_moneda_entero(beneficio_total)}{self.ENDC}") # Se resalta el beneficio
+        # APLICACIÓN DE CAMBIO
+        print(f"Comisión ({comision_porcentaje:.1f}%):{self.COLOR_VALOR}${self.formato_moneda_entero(comision_vendedor)}{self.ENDC}")
+        # APLICACIÓN DE CAMBIO
+        print(f"{self.COLOR_TITULO}TOTAL A PAGAR:   ${self.formato_moneda_entero(total)}{self.ENDC}")
+        print(self.COLOR_SEPARADOR + "=" * 40 + self.ENDC)
+        
+        confirmar = input(f"\n¿Confirmar venta? ({self.COLOR_VALOR}s/n{self.ENDC}): ").lower().strip()
+        if confirmar == 's':
+            # Generar ID de venta
+            venta_id = max([v['id'] for v in self.ventas]) + 1 if self.ventas else 1
+            
+            nueva_venta = {
+                'id': venta_id,
+                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'producto_id': producto['id'],
+                'producto_nombre': producto['nombre'],
+                'precio_compra': producto['precio_compra'],
+                'beneficio_unitario': producto['beneficio'],
+                'cliente_id': cliente_id,
+                'cliente_nombre': cliente_nombre,
+                'vendedor_id': vendedor_id,
+                'vendedor_nombre': vendedor['nombre'],
+                'cantidad': cantidad,
+                'precio_unitario': producto['precio_venta'],
+                'subtotal': subtotal,
+                'beneficio_total': beneficio_total,
+                'comision': comision_vendedor,
+                'porcentaje_comision': comision_porcentaje,
+                'total': total
+            }
+            
+            self.ventas.append(nueva_venta)
+            self.guardar_json(self.ventas, self.archivo_ventas)
+            
+            # --- DESCUENTO DE STOCK ---
+            producto['stock'] = producto.get('stock', 0) - cantidad # Asegura que el campo existe
+            self.guardar_json(self.productos, self.archivo_productos) # Guardar productos actualizados
+            # --- FIN DESCUENTO DE STOCK ---
+
+            print(f"\n{self.COLOR_EXITO}✅ Venta registrada exitosamente!{self.ENDC}")
+        else:
+            print(f"\n{self.COLOR_ADVERTENCIA}Venta cancelada.{self.ENDC}")
+        
+        self.pausar()
+    
+    def listar_ventas(self):
+        """Lista todas las ventas (Compacta la tabla) - MODIFICADO PARA MOSTRAR BENEFICIO"""
+        self.limpiar_pantalla()
+        separador = "=" * 88 # Reducción drástica del ancho
+        print(self.COLOR_TITULO + separador)
+        print(" " * 35 + "LISTA DE VENTAS (HISTÓRICO)")
+        print(separador + self.ENDC)
+        
+        if not self.ventas:
+            print(f"{self.COLOR_ADVERTENCIA}No hay ventas registradas.{self.ENDC}")
+            self.pausar()
+            return
+        
+        # Compactación: Ahora muestra SubTotal, Beneficio, Comisión y Total
+        print(f"{self.COLOR_MENU}{'ID':<4} {'Fecha-Hora':<10} {'Producto':<15} "
+              f"{'Cant':<4} {'SubTotal':<10} {'Beneficio':<10} {'Comisión':<10} {'Total':<10}{self.ENDC}")
+        print(self.COLOR_SEPARADOR + "-" * 88 + self.ENDC)
+        
+        total_ventas = 0
+        total_comisiones = 0
+        total_beneficios = 0 # Nuevo contador
+        
+        for venta in self.ventas:
+            # Asegurar que beneficio_total exista para evitar errores
+            beneficio_total_venta = venta.get('beneficio_total', 0)
+
+     </h1>
